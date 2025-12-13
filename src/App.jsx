@@ -1,45 +1,79 @@
 import { useState } from "react";
+import SearchBar from "./components/SearchBar";
+import WeatherCard from "./components/WeatherCard";
+import ForecastCard from "./components/ForecastCard";
+
+const API_KEY = "8f6bf9459b117937495fe29490b78d5a";
 
 function App() {
   const [city, setCity] = useState("");
+  const [weather, setWeather] = useState(null);
+  const [forecast, setForecast] = useState([]);
   const [error, setError] = useState("");
 
+  const fetchWeather = async (searchCity) => {
+    try {
+      // 1️⃣ Geocoding API to get lat/lon
+      const geoRes = await fetch(
+        `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(
+          searchCity
+        )}&limit=1&appid=${API_KEY}`
+      );
+      const geoData = await geoRes.json();
+      if (!geoData || geoData.length === 0) {
+        setError("City not found");
+        setWeather(null);
+        setForecast([]);
+        return;
+      }
+
+      const { lat, lon, name } = geoData[0];
+
+      // 2️⃣ Current weather
+      const weatherRes = await fetch(
+        `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+      );
+      const weatherData = await weatherRes.json();
+      setWeather(weatherData);
+      setError("");
+
+      // 3️⃣ 5-day forecast
+      const forecastRes = await fetch(
+        `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+      );
+      const forecastData = await forecastRes.json();
+      const dailyForecast = forecastData.list.filter((item) =>
+        item.dt_txt.includes("12:00:00")
+      );
+      setForecast(dailyForecast);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to fetch weather");
+      setWeather(null);
+      setForecast([]);
+    }
+  };
+
   const handleSearch = () => {
-    if (!city) {
+    const trimmedCity = city.trim();
+    if (!trimmedCity) {
       setError("Please enter a city");
       return;
     }
-    setError("");
-    alert(`You searched for: ${city}`);
+    fetchWeather(trimmedCity);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-blue-50 p-4">
-      {/* Centered card */}
-      <div className="w-full max-w-md bg-white p-6 rounded-lg shadow-md text-center">
-        <h1 className="text-4xl font-bold text-blue-800 mb-6">
-          Weather Dashboard
-        </h1>
+    <div className="min-h-screen flex flex-col items-center bg-blue-50 p-4">
+      <SearchBar
+        city={city}
+        setCity={setCity}
+        handleSearch={handleSearch}
+        error={error}
+      />
 
-        {/* Input + Button */}
-        <div className="flex flex-col sm:flex-row gap-2 justify-center">
-          <input
-            type="text"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="Enter city"
-            className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <button
-            onClick={handleSearch}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition sm:w-auto w-full"
-          >
-            Search
-          </button>
-        </div>
-
-        {error && <p className="text-red-600 font-semibold mt-4">{error}</p>}
-      </div>
+      {weather && <WeatherCard weather={weather} />}
+      {forecast.length > 0 && <ForecastCard forecast={forecast} />}
     </div>
   );
 }
